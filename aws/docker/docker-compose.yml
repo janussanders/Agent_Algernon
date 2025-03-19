@@ -1,0 +1,17 @@
+services:
+  rag-agent:
+    container_name: rag-agent
+    build:
+      context: ../..  # Points to project root
+      dockerfile: aws/docker/Dockerfile.combined
+    image: rag-agent:${DEPLOY_MODE}
+    ports:
+      - "8501:8501"
+      - "6333:6333"
+      - "6334:6334"
+    # Note: All configurations are managed by App Runner in production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      interval: 5s
+      timeout: 10s
+      retries: 3 

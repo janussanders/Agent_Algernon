@@ -1,0 +1,103 @@
+﻿Access key ID,Secret access key
+AKIA2AUOPJLPG2YDAZ6H,J66QoLLVayBPj+Dspr/80Xw60pmJkcH0huofyweQ
+
+AWS CLI Commands:
+
+# Sync the current directory to the S3 bucket
+aws s3 sync ./RAG-Security s3://algernon-da/RAG-Security --exclude ".git/*" --exclude "__pycache__/*" --exclude "*.pyc"
+
+# Run the ./setup.sh script in S3 to create the application
+aws s3 cp s3://algernon-da/RAG-Security/setup.sh - | bash
+
+# List the contents of the S3 bucket
+aws s3 ls s3://algernon-da/RAG-Security/ --recursive
+
+# Download a file from the S3 bucket
+aws s3 cp s3://algernon-da/RAG-Security/file.txt .
+
+# Upload a file to the S3 bucket
+aws s3 cp file.txt s3://algernon-da/RAG-Security/
+
+# Delete a file from the S3 bucket
+aws s3 rm s3://algernon-da/RAG-Security/file.txt
+
+# Delete a directory from the S3 bucket
+aws s3 rm s3://algernon-da/RAG-Security/ --recursive
+
+# Delete a file from the S3 bucket
+aws s3 rm s3://algernon-da/RAG-Security/file.txt
+
+Deployment Commands:
+
+# Deploy the CloudFormation stack
+aws cloudformation create-stack --stack-name algernon --template-body file://aws/cloudformation.yml --parameters ParameterKey=Environment,ParameterValue=dev --capabilities CAPABILITY_IAM
+
+# Get the stack events to see the error
+aws cloudformation describe-stack-events --stack-name algernon --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`]'
+
+# Monitor the stack creation
+aws cloudformation wait stack-create-complete --stack-name algernon && aws cloudformation describe-stacks --stack-name algernon --query 'Stacks[0].Outputs'
+
+# Delete the CloudFormation stack
+aws cloudformation delete-stack --stack-name algernon
+
+# List the CloudFormation stacks
+aws cloudformation list-stacks
+
+# Describe the CloudFormation stack
+aws cloudformation describe-stacks --stack-name algernon
+
+# Update the CloudFormation stack
+aws cloudformation update-stack --stack-name algernon --template-body file://aws/cloudformation.yml --parameters ParameterKey=Environment,ParameterValue=dev --capabilities CAPABILITY_IAM
+
+# List all repositories
+aws ecr describe-repositories
+
+# List images in rag-app repository
+aws ecr describe-images --repository-name rag-app
+
+# List images in qdrant repository
+aws ecr describe-images --repository-name qdrant
+
+# Get login password and authenticate Docker with ECR
+aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 688567306974.dkr.ecr.us-west-2.amazonaws.com
+
+# Check image tags
+aws ecr list-images --repository-name rag-app
+aws ecr list-images --repository-name qdrant
+
+# Check AWS configuration
+aws configure list
+
+# View credentials file (if it exists)
+cat ~/.aws/credentials
+
+# Get login password again and save it to view
+aws ecr get-login-password --region us-west-2
+
+# Configure AWS CLI with your credentials
+aws configure set aws_access_key_id AKIA2AUOPJLPG2YDAZ6H
+aws configure set aws_secret_access_key J66QoLLVayBPj+Dspr/80Xw60pmJkcH0huofyweQ
+aws configure set region us-west-2
+aws configure set output json
+
+# List all App Runner services
+aws apprunner list-services
+
+# Get service status
+aws apprunner describe-service --service-arn $(aws apprunner list-services --query 'ServiceSummaryList[?ServiceName==`algernon`].ServiceArn' --output text)
+
+# Get CloudFormation stack status
+aws cloudformation describe-stacks --stack-name algernon
+
+# Delete stack if needed
+aws cloudformation delete-stack --stack-name algernon
+
+# Development mode (rebuilds and pushes everything)
+./aws/deploy-stack.sh dev
+
+# Production mode (uses existing images, strict checks)
+./aws/deploy-stack.sh prod
+
+# Update mode (only updates App Runner config)
+./aws/deploy-stack.sh update

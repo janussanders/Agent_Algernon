@@ -1,0 +1,87 @@
+# Start from a suitable base image
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies and clean up in the same layer
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
+    iputils-ping \
+    netcat-openbsd \
+    dnsutils \
+    net-tools \
+    procps \
+    iproute2 \
+    telnet \
+    openssh-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Configure SSH
+RUN mkdir /var/run/sshd && \
+    echo 'root:Docker!' | chpasswd && \
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+# Install Qdrant
+RUN curl -L https://github.com/qdrant/qdrant/releases/download/v1.7.4/qdrant-x86_64-unknown-linux-gnu.tar.gz | tar xz && \
+    mv qdrant /usr/local/bin/ && \
+    chmod +x /usr/local/bin/qdrant
+
+# Copy requirements and env files from project root
+COPY requirements.txt /app/requirements.txt
+COPY src/ /app/src/
+
+# Install Python dependencies with cleanup
+RUN pip install --no-cache-dir -r /app/requirements.txt \
+    && rm -rf ~/.cache/pip/*
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8501
+
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data /app/qdrant/storage
+
+# Set permissions
+RUN chmod -R 777 /app/logs /app/data /app/qdrant
+
+# Expose ports for all services
+EXPOSE 22 6333 6334 6335 8501
+
+# Create a startup script
+RUN echo '#!/bin/bash\n\
+# Start SSH daemon\n\
+service ssh start\n\
+\n\
+# Create Qdrant config dynamically\n\
+cat > /app/qdrant/config.yaml << EOF\n\
+storage:\n\
+  storage_path: /app/qdrant/storage\n\
+service:\n\
+  http_port: ${QDRANT_PORT:-6333}\n\
+  grpc_port: ${QDRANT_GRPC_PORT:-6334}\n\
+EOF\n\
+\n\
+# Start Qdrant in the background\n\
+qdrant --config-path /app/qdrant/config.yaml &\n\
+\n\
+# Wait for Qdrant to be ready\n\
+echo "Waiting for Qdrant to start..."\n\
+while ! nc -z localhost ${QDRANT_PORT:-6333}; do\n\
+  sleep 1\n\
+done\n\
+echo "Qdrant is ready"\n\
+\n\
+# Start the RAG app\n\
+streamlit run src/app.py' > /app/start.sh
+
+RUN chmod +x /app/start.sh
+
+# Run the startup script
+CMD ["/app/start.sh"] 

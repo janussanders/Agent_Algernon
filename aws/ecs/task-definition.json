@@ -1,0 +1,108 @@
+{
+    "family": "rag-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "1024",
+    "memory": "2048",
+    "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/ecsTaskRole",
+    "containerDefinitions": [
+        {
+            "name": "qdrant",
+            "image": "${ECR_QDRANT_IMAGE}",
+            "essential": true,
+            "portMappings": [
+                {
+                    "containerPort": 6333,
+                    "hostPort": 6333,
+                    "protocol": "tcp"
+                },
+                {
+                    "containerPort": 6334,
+                    "hostPort": 6334,
+                    "protocol": "tcp"
+                }
+            ],
+            "environment": [
+                {
+                    "name": "QDRANT_HOST",
+                    "value": "qdrant"
+                },
+                {
+                    "name": "QDRANT_HTTP_PORT",
+                    "value": "6333"
+                },
+                {
+                    "name": "QDRANT_HTTPS",
+                    "value": "true"
+                },
+                {
+                    "name": "QDRANT_VERIFY_SSL",
+                    "value": "true"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/rag-task",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "qdrant"
+                }
+            },
+            "healthCheck": {
+                "command": ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3
+            }
+        },
+        {
+            "name": "rag-app",
+            "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:latest",
+            "essential": true,
+            "portMappings": [
+                {
+                    "containerPort": 8501,
+                    "hostPort": 8501,
+                    "protocol": "tcp"
+                }
+            ],
+            "environment": [
+                {
+                    "name": "DEPLOYMENT_TYPE",
+                    "value": "ecs"
+                },
+                {
+                    "name": "ENVIRONMENT",
+                    "value": "production"
+                }
+            ],
+            "secrets": [
+                {
+                    "name": "SAMBANOVA_API_KEY",
+                    "valueFrom": "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/rag-app/SAMBANOVA_API_KEY"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/rag-task",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "rag-app"
+                }
+            },
+            "healthCheck": {
+                "command": ["CMD-SHELL", "curl -f http://localhost:8501/health || exit 1"],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3
+            },
+            "dependsOn": [
+                {
+                    "containerName": "qdrant",
+                    "condition": "HEALTHY"
+                }
+            ]
+        }
+    ]
+} 

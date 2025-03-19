@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  qdrant:
+    container_name: qdrant
+    image: ${ECR_QDRANT_IMAGE}
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_HTTP_PORT=6333
+      - QDRANT_HTTPS=true
+      - QDRANT_VERIFY_SSL=true
+    networks:
+      - rag-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://localhost:6333/healthz"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+
+  rag-app:
+    container_name: rag-app
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.prod
+    ports:
+      - "8501:8501"
+    environment:
+      - DEPLOYMENT_TYPE=ecs
+      - ENVIRONMENT=production
+    env_file:
+      - ../.env
+    networks:
+      - rag-network
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  rag-network:
+    driver: bridge 
