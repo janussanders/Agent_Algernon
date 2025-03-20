@@ -63,18 +63,57 @@ def connect_to_qdrant(max_retries=5, retry_delay=5):
 
 class StreamlitApp:
     def __init__(self):
-        self.vector_store = VectorStore()
-        self.document_processor = DocumentProcessor()
-        self.setup_page_config()
-        self.setup_session_state()
-        
-    def setup_page_config(self):
+        """Initialize the Streamlit app"""
         st.set_page_config(
-            page_title="Algernon - Document Analysis & Chat",
-            page_icon="🤖",
+            page_title="Algernon",
             layout="wide",
             initial_sidebar_state="expanded"
         )
+        
+        # Configure server headers for WebSocket support
+        if hasattr(st, '_server'):
+            st._server.add_header(
+                "Content-Security-Policy",
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: ws: wss:; "
+                "connect-src 'self' ws: wss: http: https: data: *; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https:; "
+                "style-src 'self' 'unsafe-inline' https:; "
+                "img-src 'self' data: https:; "
+                "frame-src 'self' https:;"
+            )
+            st._server.add_header(
+                "Access-Control-Allow-Origin",
+                "*"
+            )
+            st._server.add_header(
+                "Access-Control-Allow-Methods",
+                "GET, POST, OPTIONS"
+            )
+            st._server.add_header(
+                "Access-Control-Allow-Headers",
+                "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+            )
+            st._server.add_header(
+                "X-Frame-Options",
+                "SAMEORIGIN"
+            )
+
+        # Connect to Qdrant with retries
+        try:
+            self.qdrant_client = connect_to_qdrant()
+        except Exception as e:
+            logger.error(f"Failed to connect to Qdrant: {str(e)}")
+            self.qdrant_client = None
+
+        self.temp_dir = tempfile.mkdtemp()
+        logger.info(f"Created temporary directory: {self.temp_dir}")
+        
+        # Initialize document processor and vector store
+        self.document_processor = DocumentProcessor()
+        self.vector_store = VectorStore()
+        
+        # Initialize session state
+        self.setup_session_state()
         
     def setup_session_state(self):
         """Initialize session state variables"""
@@ -108,6 +147,12 @@ class StreamlitApp:
             st.session_state.chat_history = []
         if 'chat_responses' not in st.session_state:
             st.session_state.chat_responses = []
+        if 'saved_responses' not in st.session_state:
+            st.session_state.saved_responses = []
+        if 'total_tokens' not in st.session_state:
+            st.session_state.total_tokens = 0
+        if 'embedding_fig' not in st.session_state:
+            st.session_state.embedding_fig = None
         
     def render_login(self):
         """Render the login interface"""
@@ -243,58 +288,113 @@ class StreamlitApp:
                 st.rerun()
                 
     def render_chat_interface(self):
-        st.title("Chat with Algernon")
+        """Render the chat interface"""
+        st.write("### Chat Interface")
         
-        # Display chat messages
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+        # Initialize saved responses in session state if not exists
+        if 'saved_responses' not in st.session_state:
+            st.session_state.saved_responses = self.load_saved_responses()
+        
+        # Chat input and processing
+        query = st.text_input("Enter your query:", key="chat_input")
+        if st.button("Send", key="send_button"):
+            if query:
+                # Initialize query state
+                if 'chat_query_running' not in st.session_state:
+                    st.session_state.chat_query_running = False
                 
-        # Chat input
-        if prompt := st.chat_input("What would you like to know?"):
-            # Add user message to chat history
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-                
-            # Display assistant response
-            with st.chat_message("assistant"):
-                message_placeholder = st.empty()
-                full_response = ""
-                
-                # Prepare context based on whether a document is loaded
-                messages = st.session_state.messages
-                if st.session_state.current_document:
-                    # Add document context for RAG
-                    messages = [
-                        {"role": "system", "content": "You are analyzing the uploaded document. Use the document context to answer questions."},
-                        {"role": "user", "content": f"Document context: {st.session_state.current_document[:1000]}..."},
-                        *st.session_state.messages
-                    ]
-                
-                # Stream the response
-                for response_chunk in create_streaming_chat_completion(
-                    messages=messages,
-                    model=st.session_state.selected_model,
-                    temperature=st.session_state.temperature,
-                    max_tokens=st.session_state.max_tokens,
-                    top_p=st.session_state.top_p,
-                    stream=True
-                ):
-                    full_response += response_chunk
-                    message_placeholder.markdown(full_response + "▌")
-                    
-                message_placeholder.markdown(full_response)
-                
-            # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
-                
+                if not st.session_state.chat_query_running:
+                    try:
+                        st.session_state.chat_query_running = True
+                        # Run async query in a new event loop
+                        response = asyncio.run(self.process_query(query, is_doc_query=False))
+                        if response:
+                            st.session_state.current_response = response
+                    finally:
+                        st.session_state.chat_query_running = False
+            else:
+                st.warning("Please enter a query")
+
+    def render_document_chat(self):
+        """Render the document chat interface"""
+        st.write("### Document Analysis")
+        
+        # Document upload section
+        uploaded_file = st.file_uploader(
+            "Upload a document to analyze",
+            type=["pdf", "json"],
+            help="Upload a document to analyze"
+        )
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            if uploaded_file:
+                if st.session_state.doc_name != uploaded_file.name:
+                    with st.spinner("Processing document..."):
+                        if self.process_uploaded_file(uploaded_file):
+                            st.success(f"Successfully processed: {uploaded_file.name}")
+                            st.session_state.doc_name = uploaded_file.name
+                            logger.info(f"Document content length: {len(st.session_state.doc_content)}")
+                        else:
+                            st.error("Failed to process document")
+        
+        with col2:
+            # Visualization toggle
+            if uploaded_file and st.button("Generate Visualization"):
+                with st.spinner("Creating document visualization..."):
+                    try:
+                        chunks, _ = self.vector_store.process_document(st.session_state.doc_content)
+                        st.session_state.embedding_fig = self.vector_store.create_interactive_graph()
+                        st.success("Visualization created!")
+                    except Exception as e:
+                        st.error(f"Failed to create visualization: {str(e)}")
+
+    def render_token_analysis(self):
+        """Render the document split analysis interface"""
+        st.write("### Document Split Analysis")
+        
+        if not st.session_state.doc_content:
+            st.info("Please upload a document in the Document Analysis tab first")
+            return
+        
+        try:
+            from transformers import BertTokenizer
+            tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+            total_tokens = st.session_state.total_tokens
+            
+            # Add max token size input
+            max_chunk_size = st.number_input(
+                "Max Tokens per Split",
+                min_value=1000,
+                max_value=28000,
+                value=16384,
+                step=1000,
+                help="Specify the maximum number of tokens per document split"
+            )
+            
+            # Create document splits
+            splits = self.create_document_splits(st.session_state.doc_content, tokenizer, max_chunk_size)
+            
+            # Display analysis
+            num_splits = len(splits)
+            st.markdown(f"""
+            ### Document Analysis
+            - Total Tokens: **{total_tokens:,}**
+            - Max Tokens per Split: **{max_chunk_size:,}**
+            - Number of Splits: **{num_splits}**
+            """)
+        except Exception as e:
+            st.error(f"Error rendering token analysis: {str(e)}")
+
     def render(self):
         """Main render method for the Streamlit app"""
-        st.title("Algernon")
+        if not st.session_state.is_authenticated:
+            self.render_login()
+            return
         
-        # Initialize API configuration
-        self.initialize_app()
+        # Render sidebar first
+        self.render_sidebar()
         
         # Only show main content if API is validated
         if st.session_state.api_validated:
@@ -366,16 +466,51 @@ class StreamlitApp:
                 else:
                     st.warning("Please enter both API key and URL")
 
-    def run(self):
-        if not st.session_state.is_authenticated:
-            self.render_login()
-        else:
-            self.render_sidebar()
-            self.render_chat_interface()
-                
+    def process_uploaded_file(self, uploaded_file):
+        """Process an uploaded file and store its content"""
+        try:
+            if uploaded_file is None:
+                return False
+            
+            # Save uploaded file
+            file_path = os.path.join(self.temp_dir, uploaded_file.name)
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            logger.info(f"Saved file to: {file_path}")
+            
+            # Process the document content
+            content = self.document_processor.extract_text(file_path)
+            
+            # Calculate total tokens
+            from transformers import BertTokenizer
+            tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+            total_tokens = len(tokenizer.encode(content, add_special_tokens=False))
+            
+            # Store in session state
+            st.session_state.doc_content = content
+            st.session_state.total_tokens = total_tokens
+            logger.info(f"Processed document content: {len(content)} characters, {total_tokens} tokens")
+            
+            return True
+            
+        except Exception as e:
+            st.error(f"Error processing file: {str(e)}")
+            logger.error(f"File processing error: {str(e)}")
+            return False
+
 def main():
+    """Main entry point for the application"""
+    # Initialize session state variable
+    if 'trigger_rerun' not in st.session_state:
+        st.session_state['trigger_rerun'] = False
+
+    if st.session_state['trigger_rerun']:
+        st.session_state['trigger_rerun'] = False
+        st.rerun()  # Use this to trigger a rerun
+
     app = StreamlitApp()
-    app.run()
-    
+    app.render()  # Use render() instead of run()
+
 if __name__ == "__main__":
     main() 
