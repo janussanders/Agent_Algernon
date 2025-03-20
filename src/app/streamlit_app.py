@@ -77,6 +77,7 @@ class StreamlitApp:
         )
         
     def setup_session_state(self):
+        """Initialize session state variables"""
         if 'messages' not in st.session_state:
             st.session_state.messages = []
         if 'current_document' not in st.session_state:
@@ -97,8 +98,19 @@ class StreamlitApp:
             st.session_state.max_tokens = 1000
         if 'top_p' not in st.session_state:
             st.session_state.top_p = 0.9
-            
+        if 'doc_content' not in st.session_state:
+            st.session_state.doc_content = None
+        if 'doc_name' not in st.session_state:
+            st.session_state.doc_name = None
+        if 'api_validated' not in st.session_state:
+            st.session_state.api_validated = False
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+        if 'chat_responses' not in st.session_state:
+            st.session_state.chat_responses = []
+        
     def render_login(self):
+        """Render the login interface"""
         st.title("Welcome to Algernon")
         
         if not st.session_state.api_key:
@@ -128,7 +140,6 @@ class StreamlitApp:
                     return
                     
                 try:
-                    # Store password in session state
                     st.session_state.password = password
                     st.session_state.is_authenticated = True
                     st.rerun()
@@ -278,6 +289,83 @@ class StreamlitApp:
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": full_response})
                 
+    def render(self):
+        """Main render method for the Streamlit app"""
+        st.title("Algernon")
+        
+        # Initialize API configuration
+        self.initialize_app()
+        
+        # Only show main content if API is validated
+        if st.session_state.api_validated:
+            # Main content area with tabs
+            tab1, tab2, tab3 = st.tabs(["General Chat", "📄 Document Analysis", "🔢 Document Split Analysis"])
+            
+            with tab1:
+                self.render_chat_interface()
+                
+            with tab2:
+                self.render_document_chat()
+                
+            with tab3:
+                self.render_token_analysis()
+        else:
+            st.warning("Please configure and validate your API credentials in the sidebar")
+
+    def initialize_app(self):
+        """Initialize the application and check API credentials"""
+        with st.sidebar:
+            st.write("### API Configuration")
+            
+            # API Key input
+            api_key = st.text_input(
+                "SambaNova API Key",
+                value=st.session_state.api_key,
+                type="password",
+                key="api_key_input"
+            )
+            
+            # API URL input
+            api_url = st.text_input(
+                "SambaNova API URL",
+                value=os.getenv("SAMBANOVA_URL", "https://api.sambanova.ai/v1/chat/completions"),
+                key="api_url_input"
+            )
+            
+            # Model selection
+            model_options = [
+                "DeepSeek-R1-Distill-Llama-70B",
+                "DeepSeek-R1",
+                "Llama-3.1-Tulu-3-405B",
+                "Meta-Llama-3.3-70B-Instruct",
+                "Meta-Llama-3.1-405B-Instruct",
+                "Meta-Llama-2-70B-Chat",
+                "Meta-Llama-2-13B-Chat",
+                "Meta-Llama-2-7B-Chat"
+            ]
+            selected_model = st.selectbox(
+                "Model",
+                options=model_options,
+                index=model_options.index(st.session_state.selected_model),
+                key="model_selector"
+            )
+            st.session_state.selected_model = selected_model
+            
+            # Save button
+            if st.button("Login"):
+                if api_key and api_url:
+                    try:
+                        # Validate the setup
+                        if validate_sambanova_setup(api_key):
+                            st.session_state.api_validated = True
+                            st.success("✅ API connection validated!")
+                        else:
+                            st.error("❌ API validation failed")
+                    except Exception as e:
+                        st.error(f"❌ API validation failed: {str(e)}")
+                else:
+                    st.warning("Please enter both API key and URL")
+
     def run(self):
         if not st.session_state.is_authenticated:
             self.render_login()
