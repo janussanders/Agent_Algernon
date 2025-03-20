@@ -1,322 +1,128 @@
-# 🚀 RAG-powered SambaNova Assistant
+# Algernon
 
-A sleek Docker-based RAG (Retrieval Augmented Generation) system that provides intelligent querying using SambaNova's API, Qdrant vector storage, and a Streamlit interface.
+A powerful document analysis and chat application powered by SambaNova's AI models and Qdrant vector database.
 
-<p align="center">
-  <img src="https://substackcdn.com/image/fetch/w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffcf74ff5-80e8-4a88-8753-05cfcadfdcb4_1002x622.gif" alt="RAG System" width="800"/>
-</p>
+## Features
 
-# Document Analysis Application
-This is a Streamlit-based application for analyzing and querying documents using advanced language models. Here's a breakdown of its main features:
-
-## ✨ Core Features
-### **1. Document Analysis**
-* Upload PDF and JSON documents
-* Process and tokenize documents
-* Generate document visualizations using vector embeddings
-* Save document chunks to a vector database (Qdrant)
-
-### **2. Interactive Query System**
-* Document Chat: Ask questions about the entire document
-* Split Analysis: Break down documents into manageable chunks and query individual sections
-* Asynchronous streaming responses from LLM (Llama model)
-* Session state management to prevent concurrent queries
-
-### **3. Document Processing**
-* Automatic text extraction from documents
-* Token counting and chunk management
-* Support for large documents through chunking
-* Vector embeddings for document visualization
-
-## 🚀 AWS Deployment Features
-### **1. App Runner Service**
-* Automated deployment to AWS App Runner
-* Multi-environment support (dev/prod/update)
-* Custom domain configuration
-* Web ACL integration for security
-* VPC connector integration for secure networking
-* Automatic cleanup and resource management
-* Health check monitoring and status tracking
-* Service role and IAM policy management
-
-### **2. Container Management**
-* ECR repository setup and management
-* Multi-container deployment (Qdrant + RAG app)
-* Automated image building and pushing
-* Environment-specific configurations
-* GPU-optimized Qdrant container support
-* Cross-architecture builds (amd64/arm64)
-* Automated container cleanup
-* Image tag management per environment
-
-### **3. Deployment Tools**
-* Deployment scripts for different environments
-* Service monitoring and logging
-* Clean-up utilities
-* Domain configuration tools
-* VPC infrastructure management
-* Security group configuration
-* Network endpoint setup
-* Resource state validation
-
-### **4. Network Infrastructure**
-* VPC creation and configuration
-* Multi-AZ subnet deployment
-* Internet Gateway setup
-* Route table management
-* Security group rules
-* VPC endpoint configuration for AWS services
-* Private DNS configuration
-* Network ACL management
-
-### **5. Security Features**
-* Web Application Firewall (WAF) integration
-* VPC security group policies
-* IAM role-based access control
-* ECR repository policies
-* VPC endpoint security
-* Custom domain SSL/TLS
-* Network isolation
-* Resource access policies
-
-## 🎯 Technical Features
-### Multi-platform Docker Build
-* Builds for amd64 and arm64 architectures
-* Uses buildx for efficient multi-platform builds
-
-### Asynchronous Processing
-* Uses asyncio for non-blocking operations
-* Handles streaming responses from the LLM
-
-### State Management
-* Manages concurrent queries using session state
-* Prevents multiple simultaneous queries
-* Maintains document and response history
-
-### Vector Storage
-* Integrates with Qdrant vector database
-* Stores document chunks with embeddings
-* Enables semantic search capabilities
-
-### Token Management
-* Handles large documents by chunking
-* Processes content in manageable sizes
-* Adapts to model context length limits
-
-## 🏗️ AWS Deployment Architecture
-### **Infrastructure Components**
-1. **VPC Configuration**
-   * Multi-AZ subnet architecture
-   * Internet Gateway for public access
-   * Route tables for traffic management
-   * Security groups for access control
-   * VPC endpoints for AWS services
-   * Private DNS configuration
-   * Network ACLs for additional security
-
-2. **Security Layer**
-   * Web Application Firewall rules
-   * VPC security groups
-   * IAM roles and policies
-   * SSL/TLS certification
-   * Network isolation
-   * Resource access control
-   * Audit logging
-
-3. **Service Integration**
-   * ECR repositories
-   * App Runner services
-   * CloudWatch logging
-   * VPC connectors
-   * Load balancing
-   * Health monitoring
-   * Auto-scaling
-
-### **Benefits**
-* Independent scaling and resource optimization
-* Isolated deployment and rollback capabilities
-* Separate monitoring and logging
-* Flexible update strategy
-* Optimized build process for each component
-
-### AWS Integration
-* ECR image management and versioning
-* App Runner service configuration
-* Environment-based deployments
-* Custom domain handling
-* Web ACL security integration
-
-### Deployment Modes
-* Development mode with debug features
-* Production mode with optimized settings
-* Update mode for service modifications
-* Environment-specific configurations
-
-## Deployment Process
-### Initial Setup
-* Configure AWS credentials
-* Set environment variables
-* Initialize VPC infrastructure
-* Create ECR repositories
-* Configure IAM roles
-
-### Service Deployment
-* Build and push Docker images
-* Configure VPC connectors
-* Deploy App Runner services
-* Set up domain routing
-* Configure WAF rules
-
-### Maintenance
-* Monitor service health
-* Manage resource scaling
-* Handle updates and rollbacks
-* Clean up unused resources
-* Audit security configurations
-
-## Usage Flow
-* Upload Document
-* Select and upload a document
-* System processes and tokenizes content
-* Optional visualization generation
-## Analysis Options
-* Query entire document
-* View document splits
-* Query individual splits
-* Save to vector database
-## Query and Response
-* Enter queries in text area
-* Receive streamed responses
-* View and save responses
-
-Manage document chunks
-The application provides a comprehensive interface for document analysis, combining the power of large language models with efficient document processing and storage capabilities.
-
-## 📝 License
-
-Apache 2.0
-
-## 🙏 Acknowledgments
-
-- SambaNova API
-- Qdrant Vector Database
-- Streamlit Framework
-
----
-<p align="center">
-  Made with ❤️ by [Janus Sanders/Janus Innovations]
-</p>
-
-# RAG Application
-
-A Retrieval-Augmented Generation (RAG) application built with Streamlit, Qdrant, and Transformers.
+- **General Chat**: Interact with SambaNova's AI models for general conversation
+- **Document Analysis**: Upload and analyze documents (PDF, JSON) with AI-powered insights
+- **Document Split Analysis**: Split and analyze large documents with token-aware processing
+- **Vector Storage**: Store and retrieve document embeddings using Qdrant
+- **Interactive Visualization**: Visualize document chunks and their relationships
+- **Streaming Responses**: Real-time streaming of AI model responses
+- **Product Quantization**: Efficient vector compression for large-scale storage
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.8+
 - Docker and Docker Compose
-- Git
+- SambaNova API key
+- Qdrant vector database
 
-## Local Development Setup
+## Installation
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd rag-application
+git clone https://github.com/yourusername/algernon.git
+cd algernon
 ```
 
-2. Make the development script executable:
-```bash
-chmod +x scripts/dev.sh
-```
-
-3. Start the development environment:
-```bash
-./scripts/dev.sh
-```
-
-This script will:
-- Create necessary directories (data, logs)
-- Set up a Python virtual environment
-- Install dependencies
-- Start Qdrant in Docker
-- Launch the Streamlit application
-
-## Manual Setup
-
-If you prefer to set up manually:
-
-1. Create and activate a virtual environment:
+2. Create a virtual environment and activate it:
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. Install dependencies:
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Copy the local environment file:
+4. Set up environment variables:
 ```bash
-cp .env.local .env
+cp .env.example .env
+```
+Edit `.env` with your configuration:
+```
+SAMBANOVA_API_KEY=your_api_key
+SAMBANOVA_URL=https://api.sambanova.ai/v1/chat/completions
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
 ```
 
-4. Start Qdrant:
+5. Start the services:
 ```bash
-docker-compose -f docker/docker-compose.local.yml up -d
+docker-compose up -d
 ```
 
-5. Run the application:
+## Usage
+
+1. Start the Streamlit application:
 ```bash
-streamlit run src/app.py
+streamlit run src/app/streamlit_app.py
 ```
 
-## Project Structure
+2. Open your browser and navigate to `http://localhost:8501`
+
+3. Configure your API credentials in the sidebar
+
+4. Start using the application:
+   - Use the General Chat tab for conversations
+   - Upload documents in the Document Analysis tab
+   - Analyze document splits in the Document Split Analysis tab
+
+## Architecture
+
+The application is built with the following components:
+
+- **Streamlit Frontend**: User interface and interaction
+- **Document Processor**: Handles document extraction and processing
+- **Vector Store**: Manages vector operations and storage
+- **SambaNova Integration**: AI model interaction
+- **Qdrant Database**: Vector storage and retrieval
+
+## Development
+
+### Project Structure
 
 ```
-.
-├── data/               # Data storage
-│   └── processed/     # Processed documents
-├── docker/            # Docker configuration
-├── docs/              # Documentation
-├── logs/              # Application logs
-├── scripts/           # Utility scripts
-├── src/               # Source code
-│   ├── services/     # Service modules
-│   └── app.py        # Main application
-├── .env.local        # Local environment variables
-├── docker-compose.yml # Docker Compose configuration
-└── requirements.txt   # Python dependencies
+algernon/
+├── src/
+│   ├── app/
+│   │   └── streamlit_app.py
+│   ├── document_processor.py
+│   ├── vector_store.py
+│   └── utils.py
+├── data/
+├── services/
+│   └── deepclean.sh
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
 ```
 
-## Development Workflow
+### Adding New Features
 
-1. The application will start with a login screen where you can set up your API key
-2. Once logged in, you can:
-   - Upload documents
-   - Process and visualize documents
-   - Chat with the documents
-   - Manage your API key
-
-## Troubleshooting
-
-1. If Qdrant fails to start:
-   - Check if Docker is running
-   - Verify ports 6333 and 6334 are available
-   - Check Docker logs: `docker logs rag-qdrant-local`
-
-2. If the application fails to start:
-   - Check the logs in `logs/app.log`
-   - Verify your API key is set correctly
-   - Ensure all dependencies are installed
+1. Create new modules in the `src` directory
+2. Update the main application in `streamlit_app.py`
+3. Add new dependencies to `requirements.txt`
+4. Update documentation in `README.md`
 
 ## Contributing
 
-1. Create a new branch for your feature
-2. Make your changes
-3. Submit a pull request
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 
-[Your License Here]
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- SambaNova Systems for providing the AI models
+- Qdrant for the vector database
+- Streamlit for the web framework
+- All contributors and maintainers

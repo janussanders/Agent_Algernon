@@ -1,6 +1,6 @@
 from transformers import BertTokenizer, BertModel
 import torch
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 import numpy as np
 from loguru import logger
 import os
@@ -14,6 +14,8 @@ import networkx as nx
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import euclidean_distances
 import uuid
+from sklearn.preprocessing import StandardScaler
+from sklearn.manifold import TSNE
 
 class VectorStore:
     def __init__(self, n_segments=4, n_clusters=32):
@@ -40,6 +42,13 @@ class VectorStore:
         self.codebooks = []
         self.pq_codes = []
         self.chunks = []
+        
+        # Set device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
+        
+        # Initialize scaler
+        self.scaler = StandardScaler()
         
     def _ensure_collection(self):
         """Ensure collection exists with correct settings"""
@@ -225,13 +234,13 @@ class VectorStore:
                     max_length=512,
                     padding=True,
                     truncation=True
-                )
+                ).to(self.device)
                 
                 # Get BERT embeddings
                 outputs = self.model(**inputs)
                 
                 # Use [CLS] token embedding as chunk embedding
-                embedding = outputs.last_hidden_state[0, 0, :].numpy()
+                embedding = outputs.last_hidden_state[0, 0, :].cpu().numpy()
                 embeddings.append(embedding)
         
         # Convert to numpy array

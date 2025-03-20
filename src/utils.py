@@ -15,76 +15,142 @@ load_dotenv()
 
 async def create_streaming_chat_completion(
     messages: List[Dict[str, str]],
-    model: str = "Meta-Llama-3.3-70B-Instruct",
-    max_tokens: int = 512
+    max_tokens: int = 512,
+    temperature: float = 0.7,
+    top_p: float = 0.95,
+    stream: bool = True
 ) -> AsyncGenerator[str, None]:
-    """Create a streaming chat completion using SambaNova's API"""
-    try:
-        api_key = os.getenv("SAMBANOVA_API_KEY")
-        base_url = "https://api.sambanova.ai/v1/chat/completions"
+    """
+    Create a streaming chat completion using the SambaNova API
+    
+    Args:
+        messages: List of message dictionaries
+        max_tokens: Maximum number of tokens to generate
+        temperature: Sampling temperature
+        top_p: Top-p sampling parameter
+        stream: Whether to stream the response
         
+    Yields:
+        str: Generated text chunks
+    """
+    try:
+        # Get API configuration
+        api_key = os.getenv("SAMBANOVA_API_KEY")
+        api_url = os.getenv("SAMBANOVA_URL", "https://api.sambanova.ai/v1/chat/completions")
+        
+        if not api_key:
+            raise ValueError("SAMBANOVA_API_KEY environment variable must be set")
+        
+        # Prepare request payload
+        payload = {
+            "model": os.getenv("SAMBANOVA_MODEL", "DeepSeek-R1-Distill-Llama-70B"),
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": top_p,
+            "stream": stream
+        }
+        
+        # Set up headers
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
-        # Ensure content length is within limits
-        for message in messages:
-            if len(message['content']) > 4000:  # Conservative limit
-                message['content'] = message['content'][:4000] + "..."
-        
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": True,
-            "max_tokens": max_tokens,
-            "temperature": 0.7,
-            "top_p": 0.9
-        }
-        
-        logger.info(f"Sending request with payload length: {len(str(payload))} bytes")
-        
+        # Make request
         async with aiohttp.ClientSession() as session:
-            async with session.post(base_url, headers=headers, json=payload) as response:
+            async with session.post(api_url, json=payload, headers=headers) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error(f"API Error: {response.status} - {error_text}")
-                    raise Exception(f"API Error: {response.status} - {error_text}")
+                    raise Exception(f"API request failed: {error_text}")
                 
-                async for line in response.content:
-                    if line:
-                        try:
-                            # Decode the line and remove the "data: " prefix
-                            line_text = line.decode('utf-8').strip()
-                            if line_text.startswith('data: '):
-                                if line_text == 'data: [DONE]':
-                                    break
+                if stream:
+                    # Process streaming response
+                    async for line in response.content:
+                        if line:
+                            try:
+                                # Parse SSE data
+                                line = line.decode('utf-8').strip()
+                                if line.startswith('data: '):
+                                    data = line[6:]
+                                    if data == '[DONE]':
+                                        break
                                     
-                                # Parse the JSON data after "data: "
-                                data = json.loads(line_text[6:])
-                                if "choices" in data:
-                                    delta = data["choices"][0].get("delta", {})
-                                    if "content" in delta:
-                                        content = delta["content"]
-                                        if content:
-                                            yield content
-                                            
-                        except json.JSONDecodeError as e:
-                            # Skip JSON decode errors for empty lines
-                            if line_text and not line_text.isspace():
-                                logger.debug(f"JSON decode error: {e} for line: {line_text}")
-                            continue
-                            
+                                    chunk = parse_chunk(data)
+                                    if chunk:
+                                        yield chunk
+                            except Exception as e:
+                                logger.error(f"Error processing chunk: {str(e)}")
+                                continue
+                else:
+                    # Process non-streaming response
+                    data = await response.json()
+                    if 'choices' in data and len(data['choices']) > 0:
+                        yield data['choices'][0]['message']['content']
+    
     except Exception as e:
-        logger.error(f"Error in streaming chat completion: {str(e)}")
+        logger.error(f"Error in create_streaming_chat_completion: {str(e)}")
         raise
 
-def validate_sambanova_setup():
-    """Validate SambaNova API setup"""
-    api_key = os.getenv("SAMBANOVA_API_KEY")
-    if not api_key:
-        raise ValueError("SambaNova API key not found in environment variables")
-    return True
+def parse_chunk(data: str) -> str:
+    """
+    Parse a chunk of streaming data
+    
+    Args:
+        data: Raw chunk data
+        
+    Returns:
+        str: Parsed text content
+    """
+    try:
+        # Parse JSON data
+        chunk_data = json.loads(data)
+        
+        # Extract content from chunk
+        if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
+            delta = chunk_data['choices'][0].get('delta', {})
+            return delta.get('content', '')
+        
+        return ''
+        
+    except Exception as e:
+        logger.error(f"Error parsing chunk: {str(e)}")
+        return ''
+
+def validate_sambanova_setup() -> bool:
+    """
+    Validate the SambaNova API setup
+    
+    Returns:
+        bool: True if setup is valid
+    """
+    try:
+        # Check for required environment variables
+        api_key = os.getenv("SAMBANOVA_API_KEY")
+        api_url = os.getenv("SAMBANOVA_URL")
+        
+        if not api_key:
+            raise ValueError("SAMBANOVA_API_KEY environment variable must be set")
+        
+        if not api_url:
+            raise ValueError("SAMBANOVA_URL environment variable must be set")
+        
+        # Test API connection
+        async def test_connection():
+            async with aiohttp.ClientSession() as session:
+                headers = {"Authorization": f"Bearer {api_key}"}
+                async with session.get(api_url, headers=headers) as response:
+                    if response.status != 200:
+                        raise Exception(f"API connection failed: {response.status}")
+        
+        # Run test
+        asyncio.run(test_connection())
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error validating SambaNova setup: {str(e)}")
+        raise
 
 def get_api_credentials() -> Tuple[str, str]:
     """Get API credentials with priority: ENV > Session State > Default"""
