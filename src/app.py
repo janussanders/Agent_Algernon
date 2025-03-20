@@ -25,6 +25,9 @@ from src.services.document_service import DocumentService
 from src.services.api_service import APIService
 from src.logging_config import setup_logging
 
+# Set up logging
+setup_logging()
+
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder for numpy types"""
     def default(self, obj):
@@ -67,8 +70,40 @@ class StreamlitApp:
     
     def __init__(self):
         """Initialize the Streamlit application."""
-        # Set up logging
-        setup_logging()
+        # Set page config first
+        st.set_page_config(
+            page_title="RAG Application",
+            page_icon="📚",
+            layout="wide"
+        )
+        
+        # Configure server headers for WebSocket support
+        if hasattr(st, '_server'):
+            st._server.add_header(
+                "Content-Security-Policy",
+                "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: ws: wss:; "
+                "connect-src 'self' ws: wss: http: https: data: *; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https:; "
+                "style-src 'self' 'unsafe-inline' https:; "
+                "img-src 'self' data: https:; "
+                "frame-src 'self' https:;"
+            )
+            st._server.add_header(
+                "Access-Control-Allow-Origin",
+                "*"
+            )
+            st._server.add_header(
+                "Access-Control-Allow-Methods",
+                "GET, POST, OPTIONS"
+            )
+            st._server.add_header(
+                "Access-Control-Allow-Headers",
+                "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+            )
+            st._server.add_header(
+                "X-Frame-Options",
+                "SAMEORIGIN"
+            )
         
         # Initialize services
         self.qdrant_service = QdrantService()
@@ -78,15 +113,12 @@ class StreamlitApp:
         # Initialize session state
         self._init_session_state()
         
-        # Set page config
-        st.set_page_config(
-            page_title="RAG Application",
-            page_icon="📚",
-            layout="wide"
-        )
-        
         # Initialize Qdrant connection (lazy loading)
         self.qdrant_connected = False
+        
+        # Create temporary directory
+        self.temp_dir = tempfile.mkdtemp()
+        logger.info(f"Created temporary directory: {self.temp_dir}")
         
     def _init_session_state(self):
         """Initialize session state variables."""
@@ -102,6 +134,10 @@ class StreamlitApp:
             st.session_state.api_authenticated = False
         if 'api_password' not in st.session_state:
             st.session_state.api_password = ""
+        if 'query_running' not in st.session_state:
+            st.session_state.query_running = False
+        if 'current_response' not in st.session_state:
+            st.session_state.current_response = None
             
     def _ensure_qdrant_connection(self) -> bool:
         """Ensure Qdrant is connected before performing operations.
@@ -329,6 +365,82 @@ class StreamlitApp:
         
         return response
     
+    async def process_query(self, query: str, is_doc_query: bool = False, split_content: str = None):
+        """Process a query with streaming response and save history"""
+        try:
+            # Initialize tokenizer
+            from transformers import BertTokenizer
+            tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+            
+            # Prepare messages based on query type
+            if is_doc_query:
+                if split_content:  # For split analysis queries
+                    # Count tokens but don't enforce BERT's limit
+                    token_count = len(tokenizer.encode(split_content, add_special_tokens=False))
+                    logger.info(f"Split content token count: {token_count}")
+                    
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant analyzing a specific section of a document."},
+                        {"role": "user", "content": f"Document section content: {split_content}\n\nQuestion: {query}"}
+                    ]
+                    max_tokens = 4096
+                else:  # For full document queries
+                    # Count tokens but don't enforce BERT's limit
+                    token_count = len(tokenizer.encode(st.session_state.doc_content, add_special_tokens=False))
+                    logger.info(f"Full document token count: {token_count}")
+                    
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant analyzing documents."},
+                        {"role": "user", "content": f"Document content: {st.session_state.doc_content}\n\nQuestion: {query}"}
+                    ]
+                    max_tokens = 8192
+            else:  # For general queries
+                messages = [
+                    {"role": "system", "content": "You are a helpful assistant"},
+                    {"role": "user", "content": query}
+                ]
+                max_tokens = 512
+
+            # Create placeholder for streaming output
+            response_container = st.empty()
+            full_response = ""
+
+            # Initialize session state for responses if not exists
+            if 'current_response' not in st.session_state:
+                st.session_state.current_response = None
+
+            # Log the content being sent
+            if split_content:
+                logger.info(f"Processing split content of length: {len(split_content)} chars")
+                logger.info(f"Token count for split: {len(tokenizer.encode(split_content))}")
+
+            # Stream the response
+            async for content in create_streaming_chat_completion(messages, max_tokens=max_tokens):
+                if content:
+                    full_response += content
+                    response_container.markdown(full_response + "▌")
+                    st.session_state.current_response = full_response
+
+            # Final update without cursor
+            if full_response:
+                response_container.markdown(full_response)
+                st.session_state.current_response = full_response
+                
+                # Save chat history
+                self.save_chat_history(query, full_response, datetime.now().isoformat(), is_doc_query)
+                
+                return full_response
+            else:
+                error_msg = "No response received from the API"
+                st.error(error_msg)
+                logger.error(error_msg)
+                return None
+
+        except Exception as e:
+            st.error(f"Error processing query: {str(e)}")
+            logger.error(f"Error processing query: {str(e)}")
+            return None
+    
     def run(self):
         """Run the Streamlit application."""
         try:
@@ -342,6 +454,22 @@ class StreamlitApp:
             logger.error(f"Error running application: {str(e)}")
             st.error("An error occurred while running the application.")
 
+def main():
+    """Main entry point for the application"""
+    # Initialize session state variable
+    if 'trigger_rerun' not in st.session_state:
+        st.session_state['trigger_rerun'] = False
+
+    if st.session_state['trigger_rerun']:
+        st.session_state['trigger_rerun'] = False
+        st.rerun()  # Use this to trigger a rerun
+
+    try:
+        app = StreamlitApp()
+        app.run()
+    except Exception as e:
+        logger.error(f"Application error: {str(e)}")
+        st.error("An error occurred while running the application. Please check the logs for details.")
+
 if __name__ == "__main__":
-    app = StreamlitApp()
-    app.run() 
+    main() 

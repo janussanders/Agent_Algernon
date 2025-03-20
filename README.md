@@ -209,77 +209,114 @@ Apache 2.0
 
 # RAG Application
 
-A RAG (Retrieval-Augmented Generation) application with Streamlit frontend and Qdrant backend.
+A Retrieval-Augmented Generation (RAG) application built with Streamlit, Qdrant, and Transformers.
+
+## Prerequisites
+
+- Python 3.8 or higher
+- Docker and Docker Compose
+- Git
+
+## Local Development Setup
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd rag-application
+```
+
+2. Make the development script executable:
+```bash
+chmod +x scripts/dev.sh
+```
+
+3. Start the development environment:
+```bash
+./scripts/dev.sh
+```
+
+This script will:
+- Create necessary directories (data, logs)
+- Set up a Python virtual environment
+- Install dependencies
+- Start Qdrant in Docker
+- Launch the Streamlit application
+
+## Manual Setup
+
+If you prefer to set up manually:
+
+1. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Copy the local environment file:
+```bash
+cp .env.local .env
+```
+
+4. Start Qdrant:
+```bash
+docker-compose -f docker/docker-compose.local.yml up -d
+```
+
+5. Run the application:
+```bash
+streamlit run src/app.py
+```
 
 ## Project Structure
 
 ```
 .
-├── aws/                    # AWS infrastructure and deployment
-│   ├── ecs/               # ECS configurations
-│   └── scripts/           # AWS deployment scripts
-├── config/                # Environment configurations
-│   └── env/              # Environment-specific settings
-├── docker/               # Docker configurations
-│   ├── Dockerfile.local  # Local development Dockerfile
-│   ├── Dockerfile.prod   # Production Dockerfile
-│   ├── docker-compose.local.yml
-│   └── docker-compose.prod.yml
-├── src/                  # Application source code
-├── tests/               # Test files
-├── data/                # Data directory
-├── logs/                # Application logs
-├── docs/                # Documentation
-├── requirements.txt     # Python dependencies
-└── scripts/             # Local development scripts
-    └── dev.sh          # Local development setup
+├── data/               # Data storage
+│   └── processed/     # Processed documents
+├── docker/            # Docker configuration
+├── docs/              # Documentation
+├── logs/              # Application logs
+├── scripts/           # Utility scripts
+├── src/               # Source code
+│   ├── services/     # Service modules
+│   └── app.py        # Main application
+├── .env.local        # Local environment variables
+├── docker-compose.yml # Docker Compose configuration
+└── requirements.txt   # Python dependencies
 ```
 
-## Development
+## Development Workflow
 
-### Local Development
+1. The application will start with a login screen where you can set up your API key
+2. Once logged in, you can:
+   - Upload documents
+   - Process and visualize documents
+   - Chat with the documents
+   - Manage your API key
 
-1. Set up the environment:
-```bash
-./scripts/dev.sh
-```
+## Troubleshooting
 
-2. Access the application at http://localhost:8501
+1. If Qdrant fails to start:
+   - Check if Docker is running
+   - Verify ports 6333 and 6334 are available
+   - Check Docker logs: `docker logs rag-qdrant-local`
 
-### Production Deployment
+2. If the application fails to start:
+   - Check the logs in `logs/app.log`
+   - Verify your API key is set correctly
+   - Ensure all dependencies are installed
 
-1. Set up AWS resources:
-```bash
-./aws/scripts/setup_aws.sh
-```
+## Contributing
 
-2. Deploy to AWS:
-```bash
-./aws/scripts/deploy.sh
-```
+1. Create a new branch for your feature
+2. Make your changes
+3. Submit a pull request
 
-## Environment Variables
+## License
 
-The application uses different environment configurations for local and production:
-
-- `config/env/local.env`: Local development settings
-- `config/env/prod.env`: Production settings
-
-## Docker
-
-The application uses different Docker configurations for local and production:
-
-- Local: Uses `docker-compose.local.yml` for development
-- Production: Uses `docker-compose.prod.yml` for AWS ECS deployment
-
-## AWS Infrastructure
-
-The application is deployed on AWS ECS Fargate with the following components:
-
-- ECR: Container registry for Docker images
-- ECS: Container orchestration
-- CloudWatch: Logging and monitoring
-- SSM: Parameter store for secrets
-- IAM: Security and permissions
-
-See `aws/README.md` for more details about the AWS infrastructure.
+[Your License Here]

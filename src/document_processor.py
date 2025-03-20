@@ -15,10 +15,9 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.models import Distance, VectorParams
 from llama_index.llms.sambanovasystems import SambaNovaCloud
-import PyPDF2
+from pypdf import PdfReader
 import docx
 import magic
-from PyPDF2 import PdfReader
 from docx import Document
 import openpyxl
 

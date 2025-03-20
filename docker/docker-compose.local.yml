@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   qdrant:
-    container_name: qdrant
+    container_name: rag-qdrant-local
     image: qdrant/qdrant:latest
     ports:
       - "6333:6333"
@@ -10,17 +10,22 @@ services:
     volumes:
       - ./qdrant_storage:/qdrant/storage
     environment:
-      - QDRANT_HOST=localhost
-      - QDRANT_HTTP_PORT=6333
-      - QDRANT_HTTPS=false
-      - QDRANT_VERIFY_SSL=false
-    networks:
-      - rag-network
+      - QDRANT_ALLOW_RECOVERY=true
+      - QDRANT_SERVICE_ENABLE_TELEMETRY=false
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-      interval: 5s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 3
+    networks:
+      - rag-network
+
+volumes:
+  qdrant_data:
+
+networks:
+  rag-network:
+    driver: bridge
 
   rag-app:
     container_name: rag-app
@@ -50,6 +55,4 @@ services:
       timeout: 10s
       retries: 3
 
-networks:
-  rag-network:
-    driver: bridge 
+ 
