@@ -87,6 +87,8 @@ class StreamlitApp:
             st.session_state.is_authenticated = False
         if 'api_key' not in st.session_state:
             st.session_state.api_key = None
+        if 'password' not in st.session_state:
+            st.session_state.password = None
         if 'selected_model' not in st.session_state:
             st.session_state.selected_model = "DeepSeek-R1-Distill-Llama-70B"
         if 'temperature' not in st.session_state:
@@ -103,21 +105,36 @@ class StreamlitApp:
             st.write("Please enter your SambaNova API key to continue")
             api_key = st.text_input("SambaNova API Key", type="password")
             if st.button("Save API Key"):
-                if validate_sambanova_setup(api_key):
-                    st.session_state.api_key = api_key
-                    st.success("API key saved successfully!")
-                    st.rerun()
-                else:
-                    st.error("Invalid API key or connection failed. Please try again.")
+                if not api_key:
+                    st.error("Please enter an API key")
+                    return
+                    
+                try:
+                    if validate_sambanova_setup(api_key):
+                        st.session_state.api_key = api_key
+                        st.success("API key saved successfully!")
+                        st.rerun()
+                    else:
+                        st.error("Invalid API key or connection failed. Please check your API key and try again.")
+                except Exception as e:
+                    logger.error(f"Error during API key validation: {str(e)}")
+                    st.error("An error occurred while validating the API key. Please try again.")
         else:
             st.write("Please enter your password to continue")
             password = st.text_input("Password", type="password")
             if st.button("Login"):
-                if password:  # Add proper password validation here
+                if not password:
+                    st.error("Please enter a password")
+                    return
+                    
+                try:
+                    # Store password in session state
+                    st.session_state.password = password
                     st.session_state.is_authenticated = True
                     st.rerun()
-                else:
-                    st.error("Invalid password. Please try again.")
+                except Exception as e:
+                    logger.error(f"Error during login: {str(e)}")
+                    st.error("An error occurred during login. Please try again.")
                     
     def render_sidebar(self):
         with st.sidebar:

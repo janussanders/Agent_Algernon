@@ -117,40 +117,43 @@ def parse_chunk(data: str) -> str:
         logger.error(f"Error parsing chunk: {str(e)}")
         return ''
 
-def validate_sambanova_setup() -> bool:
+def validate_sambanova_setup(api_key: str) -> bool:
     """
     Validate the SambaNova API setup
     
+    Args:
+        api_key (str): The API key to validate
+        
     Returns:
         bool: True if setup is valid
     """
     try:
-        # Check for required environment variables
-        api_key = os.getenv("SAMBANOVA_API_KEY")
-        api_url = os.getenv("SAMBANOVA_URL")
+        # Set the API key in environment
+        os.environ["SAMBANOVA_API_KEY"] = api_key
         
-        if not api_key:
-            raise ValueError("SAMBANOVA_API_KEY environment variable must be set")
+        # Get API URL from environment
+        api_url = os.getenv("SAMBANOVA_URL", "https://api.sambanova.ai/v1/chat/completions")
         
-        if not api_url:
-            raise ValueError("SAMBANOVA_URL environment variable must be set")
+        # Test API connection with a simple completion
+        test_messages = [{"role": "user", "content": "Test connection"}]
+        response = asyncio.run(create_streaming_chat_completion(
+            messages=test_messages,
+            model="DeepSeek-R1-Distill-Llama-70B",
+            temperature=0.7,
+            max_tokens=10,
+            stream=False
+        ))
         
-        # Test API connection
-        async def test_connection():
-            async with aiohttp.ClientSession() as session:
-                headers = {"Authorization": f"Bearer {api_key}"}
-                async with session.get(api_url, headers=headers) as response:
-                    if response.status != 200:
-                        raise Exception(f"API connection failed: {response.status}")
-        
-        # Run test
-        asyncio.run(test_connection())
-        
-        return True
-        
+        if response:
+            logger.info("Successfully validated SambaNova API key")
+            return True
+        else:
+            logger.error("Failed to get response from SambaNova API")
+            return False
+            
     except Exception as e:
         logger.error(f"Error validating SambaNova setup: {str(e)}")
-        raise
+        return False
 
 def get_api_credentials() -> Tuple[str, str]:
     """Get API credentials with priority: ENV > Session State > Default"""
