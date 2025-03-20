@@ -42,4 +42,4 @@ chmod +x /app/wait-for-qdrant.sh
 EXPOSE 8501
 
 # Run the application
-CMD ["streamlit", "run", "src/app.py", "--server.address=0.0.0.0", "--server.port=8501"] 
+CMD ["streamlit", "run", "src/app/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501"] 
