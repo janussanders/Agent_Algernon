@@ -19,14 +19,14 @@ log_error() { echo -e "${RED}✗ $1${NC}" >&2; }
 clean_metadata() {
     echo "Cleaning up macOS extended attributes and metadata..."
 
-    # Remove extended attributes
-    find "$PROJECT_DIR" -type f -exec xattr -c {} + 2>/dev/null || log_warning "Some files may not have extended attributes"
+    # Try to remove extended attributes without sudo, ignore errors
+    xattr -cr "$PROJECT_DIR" 2>/dev/null || true
 
     # Remove .DS_Store files and echo their names
-    find "$PROJECT_DIR" -name ".DS_Store" -print -delete
+    find "$PROJECT_DIR" -name ".DS_Store" -print -delete 2>/dev/null || true
 
     # Remove AppleDouble files (._*) and echo their names
-    find "$PROJECT_DIR" -name "._*" -print -delete
+    find "$PROJECT_DIR" -name "._*" -print -delete 2>/dev/null || true
 
     log_success "Extended attributes and metadata cleanup complete"
 }
@@ -41,6 +41,8 @@ clean_metadata
 success() {
     echo -e "\n${GREEN}Cleanup complete!${NC}"
 }
+
+success
 
 
 

@@ -1,6 +1,9 @@
 services:
   qdrant:
-    image: qdrant/qdrant:latest
+    container_name: algernon-qdrant
+    build:
+      context: ./services/qdrant
+      dockerfile: Dockerfile
     ports:
       - "6333:6333"  # HTTP port
       - "6334:6334"  # gRPC port
@@ -9,22 +12,26 @@ services:
     environment:
       - QDRANT_ALLOW_RECOVERY=true
       - QDRANT_SERVICE_ENABLE_CORS=true
+      - QDRANT_LOG_LEVEL=debug
     networks:
       - algernon_network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-      interval: 30s
+      interval: 5s
       timeout: 10s
       retries: 3
+      start_period: 10s
+    restart: unless-stopped
 
   algernon:
+    container_name: algernon-app
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8501:8501"
     environment:
-      - QDRANT_HOST=qdrant
+      - QDRANT_HOST=algernon-qdrant
       - QDRANT_HTTP_PORT=6333
       - QDRANT_GRPC_PORT=6334
       - QDRANT_HTTPS=false
@@ -34,6 +41,9 @@ services:
       - STREAMLIT_DEBUG=true
       - DEBUG=true
       - PYTHONPATH=/app
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
+      - STREAMLIT_SERVER_ENABLE_CORS=true
     volumes:
       - .:/app
       - /app/venv
@@ -42,8 +52,12 @@ services:
         condition: service_healthy
     networks:
       - algernon_network
-    tty: true
-    stdin_open: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
 networks:
   algernon_network:

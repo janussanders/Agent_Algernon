@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     git \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -27,6 +28,15 @@ ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 
 # Create necessary directories
 RUN mkdir -p /app/data/processed
+
+# Add wait-for-qdrant script
+RUN echo '#!/bin/sh\n\
+while ! echo > /dev/tcp/algernon-qdrant/6333; do\n\
+  echo "Waiting for Qdrant to be ready..."\n\
+  sleep 1\n\
+done\n\
+echo "Qdrant is ready!"' > /app/wait-for-qdrant.sh && \
+chmod +x /app/wait-for-qdrant.sh
 
 # Expose Streamlit port
 EXPOSE 8501
